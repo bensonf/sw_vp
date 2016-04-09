@@ -1,0 +1,45 @@
+#!/bin/sh
+
+#检查连接路由信息 : INETADDR=192.xxx.xxx.xxx;默认加密方式为none，连接路由后这个选项ENCRYPTION就会改变
+check_route()
+{
+    INETADDR=`ifconfig wlan0 | grep "inet addr" | awk -F ":" '{print $2}' | awk -F "." '{print $1}'`
+    ENCRYPTION=`iwinfo | sed -n '1,12p' | grep "Encryption"| awk -F ":" '{print $2}'`
+}
+
+#检查连接外网信息 : 114.114.114.114是DNS域名解析
+check_outnet()
+{
+    ping 114.114.114.114 >> /tmp/ping &
+    sleep 2 && kill -2 $!
+    PINGOUT=`cat /tmp/ping | grep "seq"`
+    rm /tmp/ping
+}
+
+#检查迅雷进程是否开启
+check_xunlei()
+{
+    CHECKXUNLEI=`ps | grep "etm_monitor" | grep -v grep`
+}
+
+check_route
+if [ "192" = "$INETADDR" -a "none" != "$ENCRYPTION" ]  ; then
+    check_outnet
+    if [ "" != "$PINGOUT" ] ; then
+        check_xunlei
+        if [ "" = "$CHECKXUNLEI" ] ; then
+            sh /www/thunder_opera.sh xstop
+            sleep 1
+            sh /www/thunder_opera.sh xstart
+            sleep 4
+        fi
+        check_xunlei
+        if [ "" = "$CHECKXUNLEI" ] ; then
+            echo "0"
+        fi
+    else
+        echo "1"
+    fi
+else 
+    echo "2"
+fi
