@@ -1,0 +1,114 @@
+#! /bin/sh
+##############################################################################
+# 脚本名称： vpan基础信息数据库
+# 脚本版本号： 0.0.1
+# 版本作者：leonard
+# 版本创建日期：  2016 3.29
+##---------------------------------------------------------------------------
+#  日期       工程师             细节
+#  2016/4/11  leonard            增加基础信息插入修改函数
+#  												
+#############################################################################
+
+export DB_files="/tmp/datevpan"
+
+##建立sql数据库文件
+create_dbs()
+{
+	if [ -f "$DB_files" ];then
+		rm -rf $DB_files
+		echo "db file[$DB_files] allready eixt,delete it &&"
+	fi
+   	echo "start create DB file in $DB_files"
+   	sqlite3  $DB_files "create table tb_wifilist(ssid varchar(15),key varchar(15),sig  varchar(10),ch  varchar(2));"
+   	echo "create tb_wifilist"
+  	sqlite3  $DB_files  "create table tb_base(prj varchar(15),value varchar(15));"
+  	echo "create tb_base"
+   	sqlite3  $DB_files  "create table tb_net(prj varchar(15), value varchar(15));"
+  	echo "create tb_net"
+  	sqlite3  $DB_files  "create table tb_usr(user varchar(15), secrate varchar(15),access varchar(2));"
+  	echo "create tb_net"
+   	echo  "insert data to net table"
+  	sqlite3  $DB_files  "insert into tb_net values('apssid','VPAN');"
+  	sqlite3  $DB_files  "insert into tb_net values('apkey','');"
+   	sqlite3  $DB_files  "insert into tb_net values('wssid','');"
+   	sqlite3  $DB_files  "insert into tb_net values('wch','');"
+  	sqlite3  $DB_files  "insert into tb_net values('wkey','');"
+   	echo "insert data to basic table"
+   	sqlite3  $DB_files  "insert into tb_base values('sn','');"
+   	sqlite3  $DB_files  "insert into tb_base values('mac','');"
+   	sqlite3  $DB_files  "insert into tb_base values('store_total','');"
+   	sqlite3  $DB_files  "insert into tb_base values('store_used','');"
+   	sqlite3  $DB_files  "insert into tb_base values('firmware','');"
+   	sqlite3  $DB_files  "insert into tb_base values('state_mount','');"
+   	sqlite3  $DB_files  "insert into tb_base values('state_thunder','');"
+   	sqlite3  $DB_files  "insert into tb_base values('wstatues','');"
+   	echo "insert data to user table"
+   	sqlite3  $DB_files  "insert into tb_usr values('root','000000','1');"
+  	 echo "Create files complited!"
+ }
+## 插入数据到 basic表
+alter_base()
+{	
+	local key=$1
+	local value=$2
+	sqlite3  $DB_files  "update tb_base set value='$value' where prj='$key';"
+	echo "key :[$key]  value:[$value]"	
+}
+
+##插入数据到wifilist，完成自动连接wifi
+add_wifilist()
+{
+	local ssid=$1
+	local key=$2
+	local sig=$3
+	local ch=$4
+	sqlite3  $DB_files  "insert into tb_wifilist values('$ssid','$key','$sig','$ch');"
+	echo "New add to wifilistdb-ssid:$ssid key:$key sig:$sig dB ch:$ch"
+	sync
+}
+
+##插入数据到wifi连接状态
+alt_wifista()
+{	
+	local key=$1
+	local value=$2
+	sqlite3  $DB_files  "update tb_net set value='$value' where prj='$key';"
+	echo "key :[$key]  value:[$value]"
+}
+##更新基础信息
+alt_base()
+{
+	local key=$1
+	local value=$2
+	sqlite3  $DB_files  "update tb_base set value='$value' where prj='$key';"
+    echo "key :[$key]  value:[$value]"
+}
+##查询基础信息
+dig_base()
+{ 
+    local key=$1
+    echo ` sqlite3  $DB_files  "select * from tb_base where prj='$key';"`
+}
+##查询网络信息
+dig_net()
+{
+    local key=$1
+    echo `sqlite3  $DB_files  "select * from tb_net where prj='$key';"`
+}
+##查询已经连接外网的列表
+dig_wifilist()
+{
+    local key=$1
+    echo `sqlite3 $DB_files  "select * from tb_wifilist where ssid='$key';"`
+}
+
+
+
+
+
+
+
+
+
+

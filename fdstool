@@ -1,0 +1,168 @@
+#! /bin/sh
+###########################################################
+#	ModuleName : fds tool
+#	Version    : 0.0.1
+#	Copyritght : leonard
+#	Agreement  : GPLv2
+#   modify Date: 2016.8.26
+#-----------------------------------------------------------
+#    DATE        WHO              DETAIL
+#
+#
+#
+#############################################################
+
+. ./sqltool
+. ./wifitool_for_ar71xx
+. /etc/diag.sh 
+
+############################################################
+
+DB_path="/etc/data"
+STARTd="/tmp/fdsflag"
+
+Pre_init()
+{
+	create_dbs
+}
+wtodisk()
+{
+    echo "Rewrite to Disk"                                                                           
+    cp  $DB_files  $DB_path                                                                          
+    sync 	
+}
+#############################################################
+
+
+
+
+case $1 in
+preinit)
+	Pre_init
+	;;
+##dropca Daemon Fun
+daemon)
+	local s
+	local ch
+	local si
+	local flag=0
+	if [ ! -f $DB_path ];then
+		Pre_init
+		echo "Create data file"
+		cp $DB_files  $DB_path
+		sync
+	fi
+        if [ ! -f "$DB_files" ] || [ ! -f "$STARTd" ];then	
+		touch $STARTd
+		echo "send File to RAM"	
+		cp $DB_path $DB_files
+		sync
+	fi
+	cat /dev/null > /tmp/wifinow
+	wifi_scan | while read line
+	do      
+		prj=`echo $line|awk -F ":" '{print $1}'`
+		value=`echo $line|awk -F ":" '{print $2}'`
+		if [ $prj == "signal" ];then
+			si="$value"
+		fi
+		if [ $prj == "ssid" ];then
+			s="$value"
+		fi
+		if [ $prj == "channel" ];then            
+                        ch="$value"
+			flag=1                       
+                fi
+		if [ $flag == 1 ];then   
+			flag=0
+			if [  "" != "$s" ];then
+				gflag=$(dig_wifilist "$s")
+				if [ "$gflag" !=  "" ];then
+				   echo $s:$si:$ch:$(echo $gflag|awk -F "|" '{print $2}') >> /tmp/wifinow 
+				   echo "$s:$si:$ch:$(echo $gflag|awk -F "|" '{print $2}')"
+				fi
+             fi  
+         fi
+
+	done	
+	;;
+##set AP+STA mode
+##  $2----extern wifi ssid
+##  $3----extern wifi key
+setwan)
+    local ssid=$2
+    local key=$3
+    set_state preinit
+    alt_wifista "wssid" $ssid
+    alt_wifista "wkey"  $key
+    wifi=$(dig_wifilist "$ssid" )
+    ch=`echo $wifi | awk -F "|" '{print $4}'`
+    if [ -z $ch ];then
+		ch="auto"
+    fi
+    alt_wifista "wch"  $ch
+    apssid="$(dig_net "apssid" | awk -F "|"  '{print $2}')"
+    apkey="$(dig_net "apkey" | awk -F "|"  '{print $2}')"
+    wifi_setap_mode  $ch  $apssid $apkey
+    wifi_setsta_mode $ssid $key
+    wifi reload	
+    error="$(checkwifi)"                                                                   
+    echo "WIFIstatues:$error" 
+    set_state done
+    ;;
+##set AP mode sim
+#  $2 ---ap ssid
+#  $3 ---ap ket allow null	
+setlan)
+    set_state preinit	
+    local ssid=$2
+    local key=$3
+    local ch="auto"
+    apssid="$(dig_net "apssid" | awk -F "|"  '{print $2}')"
+    apkey="$(dig_net "apkey" | awk -F "|"  '{print $2}')"
+    if [ "$ssid" != "$apssid" ];then
+	alt_wifista "apssid"  "$ssid"	
+    fi	
+    if [ "$key" != "$apkey" ];then                            
+        alt_wifista "apkey" "$key"                                                   
+    fi 
+    wifi_setap_mode  $ch  $ssid  $key		
+    wifi reload
+    set_state done
+    ;;
+wifirescu)	
+    local ch="auto"                                            
+    apssid="$(dig_net "apssid" | awk -F "|"  '{print $2}')"
+    apkey="$(dig_net "apkey" | awk -F "|"  '{print $2}')"
+    wifi_setap_mode  $ch  $apssid  $apkey                          
+    wtodisk
+    wifi reload
+    ;;
+wifiscan)
+	wifi_scan | while read line                          
+        do                                                   
+                prj=`echo $line|awk -F ":" '{print $1}'`     
+                value=`echo $line|awk -F ":" '{print $2}'`   
+                if [ $prj == "signal" ];then                 
+                        si="$value"                          
+                fi                                           
+                if [ $prj == "ssid" ];then                 
+                        s="$value"                                                                       
+                fi                                                                                       
+                if [ $prj == "channel" ];then                                                            
+                        ch="$value"                                                                      
+                        flag=1                                                             
+                fi                                                                                       
+                if [ "$flag" == "1" ];then                                                     
+			flag=0
+			if [  "" != "$s" ];then 
+				echo  "ssid:$s|signal:$si|channel:$ch"
+			fi
+         	fi                                                  
+        done      
+    ;;
+*)
+	echo "avg error...please check input avgs!"
+	;;
+esac
+#########L#E##O###N##A##R#D##CopyRight@2016#############################

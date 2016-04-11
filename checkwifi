@@ -1,45 +1,108 @@
 #!/bin/sh
 
-#检查连接路由信息 : INETADDR=192.xxx.xxx.xxx;默认加密方式为none，连接路由后这个选项ENCRYPTION就会改变
+#########################################################
+#	Module Name	:	check wifi
+#	Version		:	0.0.1
+#	Copyright	: 	bensonf
+#	Agreement  	: 	GPLv2
+#	Modify Date	:	2016-04-11
+#
+#########################################################
+
 check_route()
 {
-    INETADDR=`ifconfig wlan0 | grep "inet addr" | awk -F ":" '{print $2}' | awk -F "." '{print $1}'`
-    ENCRYPTION=`iwinfo | sed -n '1,12p' | grep "Encryption"| awk -F ":" '{print $2}'`
+	dmesg >> /tmp/checkdmesg 2>&1
+	sleep 1
+	#打印指定字符串最后一个的行号:TAKELINE
+	TAKELINE=`grep -n "wlan0: link becomes ready" /tmp/checkdmesg | tail -n 1 | cut -d ":" -f1`
+	TAKELOG=`cat /tmp/checkdmesg | sed -n ''$TAKELINE',$p' | grep "deauthenticated"`
+	rm /tmp/checkdmesg >> /dev/null 2>&1
 }
 
-#检查连接外网信息 : 114.114.114.114是DNS域名解析
 check_outnet()
 {
-    ping 114.114.114.114 >> /tmp/ping &
-    sleep 2 && kill -2 $!
-    PINGOUT=`cat /tmp/ping | grep "seq"`
-    rm /tmp/ping
+	ping 114.114.114.114 > /tmp/ping 2>&1
+	sleep 2 && kill -2 $! >> /dev/null 2>&1
+	PINGOUT=`cat /tmp/ping | grep "seq"`
+	rm /tmp/ping >> /dev/null 2>&1
 }
 
-#检查迅雷进程是否开启
 check_xunlei()
 {
-    CHECKXUNLEI=`ps | grep "etm_monitor" | grep -v grep`
+	CHECKXUNLEI=`ps | grep "etm_monitor" | grep -v grep`
 }
 
-check_route
-if [ "192" = "$INETADDR" -a "none" != "$ENCRYPTION" ]  ; then
-    check_outnet
-    if [ "" != "$PINGOUT" ] ; then
-        check_xunlei
-        if [ "" = "$CHECKXUNLEI" ] ; then
-            sh /www/thunder_opera.sh xstop
-            sleep 1
-            sh /www/thunder_opera.sh xstart
-            sleep 4
-        fi
-        check_xunlei
-        if [ "" = "$CHECKXUNLEI" ] ; then
-            echo "0"
-        fi
-    else
-        echo "1"
-    fi
-else 
-    echo "2"
+check_route_start()
+{
+	check_route
+	if [ "" = "$TAKELOG" ] ; then
+		echo "r1" > /tmp/chwifi1
+		CHWIFI1=`cat /tmp/chwifi1`
+		rm /tmp/chwifi1 >> /dev/null 2>&1
+	fi
+	#check_route second
+	check_route
+	if [ "" = "$TAKELOG" ] ; then
+		echo "r2" > /tmp/chwifi2
+		CHWIFI2=`cat /tmp/chwifi2`
+		rm /tmp/chwifi2 >> /dev/null 2>&1
+	fi
+}
+
+check_outnet_start()
+{
+	check_outnet
+	#check_outnet first
+	if [ "" != "$PINGOUT" ] ; then
+		echo "p1" > /tmp/chout1
+		CHOUT1=`cat /tmp/chout1`
+		rm /tmp/chout1 >> /dev/null 2>&1
+	fi
+	check_outnet
+	#check_ounet_second
+	if [ "" != "$PINGOUT" ] ; then
+		echo "p2" > /tmp/chout2
+		CHOUT2=`cat /tmp/chout2`
+		rm /tmp/chout2 >> /dev/null 2>&1
+	fi
+}
+
+check_xunlei_start()
+{
+	check_xunlei
+	#check_xunlei_first
+	if [ "" != "$CHECKXUNLEI" ] ; then
+		echo "x1" > /tmp/chxun1
+		CHXUN1=`cat /tmp/chxun1`
+		rm /tmp/chxun1 >> /dev/null 2>&1
+	fi
+	check_xunlei
+	#check_xunlei_second
+	if [ "" != "$CHECKXUNLEI" ] ; then
+		echo "x2" > /tmp/chxun2
+		CHXUN2=`cat /tmp/chxun2`
+		rm /tmp/chxun2 >> /dev/null 2>&1
+	fi
+}
+
+check_route_start
+if [ "r1" = "$CHWIFI1" -a "r2" = "$CHWIFI2" ] ; then
+	check_outnet_start
+	if [ "p1" = "$CHOUT1" -a "p2" = "$CHOUT2" ] ; then
+		check_xunlei_start
+		if [ "x1" = "$CHXUN1" -a "x2" = "$CHXUN2" ] ; then
+			echo "test check_xunlei" >> /dev/null
+		else
+			sh /www/thunder_opera.sh xstart >> /dev/null 2>&1
+			sleep 1
+			check_xunlei 
+			if [ "" = "$CHECKXUNLEI" ] ; then
+				echo 0
+			fi
+		fi
+	else
+		echo 1
+	fi
+else
+	echo 2
 fi

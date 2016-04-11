@@ -1,0 +1,109 @@
+#!/bin/sh
+#####################################################################
+#	脚本功能： 切换网络配置(for AR71xx)
+#	脚本版本： 0.0.1
+#	脚本作者： leonard
+#	最后的修改日期：2016 3.30
+#	功能实现方法”
+#		通过查询数据库，获得目前的外网连接状态。数据库名称为tb_net
+#	更新wifi的配置文件（etc/config/wirless）;切换为中有三种模式：
+#	ap，ap+sta; 
+#######################################################################
+WIRELESS_CONF=/etc/config/wireless
+#=========================以上为用户配置==========================================#
+wifi_zero()
+{
+	echo "[1]=====> Clean wirless config"
+	cat /dev/null > $WIRELESS_CONF
+	sync
+
+}
+
+wifi_base()
+{
+	local channel=$1
+	echo "[2]=====> Add Basic"
+	cat >> $WIRELESS_CONF << EOF
+config wifi-device  radio0
+	option type 	'mac80211'
+	option hwmode 	'11ng'
+	option path 	'platform/ar933x_wmac'
+	list ht_capab 	'SHORT-GI-20'
+	list ht_capab 	'SHORT-GI-40'
+	list ht_capab 	'RX-STBC1'
+	list ht_capab 	'DSSS_CCK-40'
+	option htmode 	'HT40' 
+	option country	'NZ'
+	option txpower  '18'
+	option channel  'auto'
+EOF
+	sync
+}
+
+wifi_setap_mode()
+{
+	local wifi_ch=$1
+	local wifi_ssid=$2
+	local wifi_key=$3
+
+	wifi_zero
+	wifi_base $wifi_ch
+
+	echo "[3]=====> Set AP Mode!"
+	cat >> $WIRELESS_CONF << EOF
+config wifi-iface
+	option device   'radio0'
+	option network  'lan'
+	option mode     'ap'
+	option ssid     '$wifi_ssid'
+EOF
+	if [ -z "$wifi_key" ];then
+		echo "[4]=====> No AP Key!"
+		cat >> $WIRELESS_CONF << EOF
+	option key  	'none'
+EOF
+	else
+		echo "[4]=====> AP Key:"$wifi_key
+		cat >> $WIRELESS_CONF << EOF
+	option encryption 'psk2+ccmp'
+	option key  	'$wifi_key'
+EOF
+	fi
+	sync
+
+}
+
+wifi_setsta_mode()
+{
+	local wifi_ssid=$1
+	local wifi_key=$2
+	echo "[5]=====> Insert sta mode code"
+	cat >> $WIRELESS_CONF << EOF
+config wifi-iface
+	option device   'radio0'
+	option network  'wan'
+	option mode     'sta'
+	option ssid     '$wifi_ssid'
+	option encryption 'psk-mixed'
+	option key	'$wifi_key'
+EOF
+	sync
+}
+wifi_scan()
+{
+	local loop=0
+	local sumap=0
+	iw dev wlan0 scan | grep -E  "DS\ Parameter\ set|SSID|signal"| sed  /DSSS/d  | awk -F ":" '{print $2}' | while read line
+	do
+		let "loop++"
+		if [ `expr $loop % 3` == 2 ];then
+			echo "ssid:"$line
+		fi
+		if [ `expr $loop % 3` == 1 ];then
+			echo "signal:"$(echo $line | awk '{print $1}')
+		fi
+		if [ `expr $loop % 3` == 0 ];then
+			echo "channel:"$(echo $line | awk '{print $2}')
+		fi
+	done
+}
